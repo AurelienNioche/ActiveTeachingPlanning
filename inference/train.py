@@ -3,7 +3,7 @@ import torch
 from torch import optim
 from tqdm.autonotebook import tqdm
 
-from . flows import NormalizingFlow
+from . flows import NormalizingFlows
 from . loss import LossTeaching
 
 
@@ -23,8 +23,8 @@ def train(
     n_u = len(np.unique(data['u']))
     n_w = len(np.unique(data['w']))
 
-    z_flow = NormalizingFlow(dim=(n_u + n_w) * 2, flow_length=flow_length)
-    theta_flow = NormalizingFlow(6, flow_length=flow_length)
+    z_flow = NormalizingFlows(dim=(n_u + n_w) * 2, flow_length=flow_length)
+    theta_flow = NormalizingFlows(6, flow_length=flow_length)
 
     loss_func = LossTeaching()
 
