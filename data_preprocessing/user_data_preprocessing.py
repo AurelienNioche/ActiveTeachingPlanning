@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 
-def get_experimental_data():
+def get_preprocessed_data():
 
     df = pd.read_csv("data/data.csv")
 

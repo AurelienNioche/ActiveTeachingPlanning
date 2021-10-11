@@ -5,8 +5,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 
-from a2c.a2c import A2C
-from environments.continuous_teaching import ContinuousTeaching
+import git
 
 from a2c.a2c import A2C
 from a2c.callback import ProgressBarCallback
@@ -19,8 +18,12 @@ sns.set()
 n_users = 5
 n_items = 60
 
+REPO = git.Repo(search_parent_directories=True)
+GIT_BRANCH = REPO.active_branch.name
+GIT_HASH = REPO.head.commit.hexsha
+
 LOAD_RATES = True
-COMMIT_NAME = '20_50_100'
+
 EXPERIMENT_NAME = ''
 
 

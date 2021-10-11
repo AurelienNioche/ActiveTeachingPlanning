@@ -5,11 +5,11 @@ from inference.train import train
 from plot.inference.plot_hist_loss import plot_loss
 from plot.inference.plot_posterior import plot_posterior
 
-from data.get_experimental_data import get_experimental_data
+from data_preprocessing.user_data_preprocessing import get_preprocessed_data
 
 
 def run_inference():
-    data = get_experimental_data()
+    data = get_preprocessed_data()
 
     z_flow, theta_flow, hist_loss = train(
         data,
