@@ -96,8 +96,7 @@ class NormalizingFlows(nn.Module):
         torch.save(self.state_dict(),
                    path+"_state_dict.p")
         torch.save(dict(dim=self.dim,
-                        flow_length=self.flow_length,
-                        flow_type=self.flow_model.__name__),
+                        flow_length=self.flow_length),
                    path+"_attr.p")
 
     @classmethod

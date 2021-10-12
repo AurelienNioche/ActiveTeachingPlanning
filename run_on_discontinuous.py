@@ -21,6 +21,7 @@ n_items = 60
 REPO = git.Repo(search_parent_directories=True)
 GIT_BRANCH = REPO.active_branch.name
 GIT_HASH = REPO.head.commit.hexsha
+COMMIT_NAME = GIT_BRANCH + '_' + GIT_HASH
 
 LOAD_RATES = True
 
