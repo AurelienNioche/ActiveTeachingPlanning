@@ -57,5 +57,3 @@ def train(
             pbar.update()
 
     return z_flow, theta_flow, hist_loss
-
-
