@@ -47,8 +47,8 @@ class LossTeaching:
         Zw2 = zk_Z[:, n_w + n_u * 2:].T
 
         # Get Z-values used for second first parameter
-        mu1, log_var_u1, log_var_w1 = zk_θ[:, :3].T
-        mu2, log_var_u2, log_var_w2 = zk_θ[:, 3:].T
+        half_mu1, log_var_u1, log_var_w1 = zk_θ[:, :3].T
+        half_mu2, log_var_u2, log_var_w2 = zk_θ[:, 3:].T
 
         # Compute Z-values for both parameters
         Z1 = Zu1[u] + Zw1[w]
@@ -65,15 +65,15 @@ class LossTeaching:
         ll = dist.Bernoulli(probs=torch.exp(log_p)).log_prob(y).sum(axis=0)
 
         # Comp. likelihood Z-values given population parameterization for first parameter
-        ll_Zu1 = dist.Normal(mu1, torch.exp(0.5 * log_var_u1)).log_prob(
+        ll_Zu1 = dist.Normal(half_mu1, torch.exp(0.5 * log_var_u1)).log_prob(
             Zu1).sum(axis=0)
-        ll_Zw1 = dist.Normal(mu1, torch.exp(0.5 * log_var_w1)).log_prob(
+        ll_Zw1 = dist.Normal(half_mu1, torch.exp(0.5 * log_var_w1)).log_prob(
             Zw1).sum(axis=0)
 
         # Comp. likelihood Z-values given population parameterization for first parameter
-        ll_Zu2 = dist.Normal(mu2, torch.exp(0.5 * log_var_u2)).log_prob(
+        ll_Zu2 = dist.Normal(half_mu2, torch.exp(0.5 * log_var_u2)).log_prob(
             Zu2).sum(axis=0)
-        ll_Zw2 = dist.Normal(mu2, torch.exp(0.5 * log_var_w2)).log_prob(
+        ll_Zw2 = dist.Normal(half_mu2, torch.exp(0.5 * log_var_w2)).log_prob(
             Zw2).sum(axis=0)
 
         # Add all the loss terms and compute average (= expectation estimate)

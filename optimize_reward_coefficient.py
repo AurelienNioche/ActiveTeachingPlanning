@@ -12,11 +12,11 @@ from environments.continuous_teaching import ContinuousTeaching
 
 from human_agents import generate_agents
 
-n_users = 10
-n_items = 140
+N_USERS = 10
+N_ITEMS = 140
 random.seed(123)
-test_users = random.sample(range(0, n_users), 3)
-forget_rates, repetition_rates = generate_agents(n_users, n_items)
+test_users = random.sample(range(0, N_USERS), 3)
+forget_rates, repetition_rates = generate_agents(N_USERS, N_ITEMS)
 
 
 def run_on_test_users(env, policy):
@@ -45,12 +45,12 @@ def optimize_agent(trial, ):
     """ Train the model and optimize"""
 
     global forget_rates, repetition_rates
-    coeff = trial.suggest_float('coeff', 0, n_items)
+    coeff = trial.suggest_float('coeff', 0, N_ITEMS)
 
     env = ContinuousTeaching(
         t_max=100,
         tau=0.9,
-        n_item=n_items,
+        n_item=N_ITEMS,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
         delta_coeffs=np.array([3, 20]),

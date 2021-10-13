@@ -52,14 +52,14 @@ def teach_in_sessions(env, session_lengths):
 
 
 if __name__ == '__main__':
-    n_users = 10
-    n_items = 140
-    forget_rates, repetition_rates = generate_agents(n_users, n_items)
+    N_USERS = 10
+    N_ITEMS = 140
+    forget_rates, repetition_rates = generate_agents(N_USERS, N_ITEMS)
     env = ContinuousTeaching(
         t_max=100,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
-        n_item=n_items,
+        n_item=N_ITEMS,
         tau=0.9,
         delta_coeffs=np.array([3, 20]),
         n_coeffs=2,

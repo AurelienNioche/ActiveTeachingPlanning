@@ -2,6 +2,7 @@ import os
 import torch
 import torch.distributions as dist
 from torch import nn
+from typing import Any, Dict
 
 
 def safe_log(z):
@@ -53,8 +54,6 @@ class NormalizingFlows(nn.Module):
 
     """
 
-    BKP_DIR = "bkp"
-
     def __init__(self, dim, flow_length):
         super().__init__()
 
@@ -89,23 +88,6 @@ class NormalizingFlows(nn.Module):
 
         return x, log_prob_base_dist, log_det
 
-    def save(self, name):
-
-        path = os.path.join(self.BKP_DIR, name)
-        os.makedirs(self.BKP_DIR, exist_ok=True)
-        torch.save(self.state_dict(),
-                   path+"_state_dict.p")
-        torch.save(dict(dim=self.dim,
-                        flow_length=self.flow_length),
-                   path+"_attr.p")
-
-    @classmethod
-    def load(cls, name):
-        path = os.path.join(cls.BKP_DIR, name)
-        model = cls(**torch.load(path+"_attr.p"))
-        model.load_state_dict(torch.load(path+"_state_dict.p"))
-        return model
-
     def inverse(self, z):
         m, _ = z.shape
         log_det = torch.zeros(m)
@@ -119,3 +101,28 @@ class NormalizingFlows(nn.Module):
         z = self.sample_base_dist(n_samples)
         x, _ = self.inverse(z)
         return x
+
+    def _get_constructor_parameters(self) -> Dict[str, Any]:
+
+        return dict(dim=self.dim,
+                    flow_length=self.flow_length)
+
+    def save(self, path: str) -> None:
+        """
+        Save model to a given location.
+        """
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({"state_dict": self.state_dict(),
+                    "data": self._get_constructor_parameters()}, path)
+
+    @classmethod
+    def load(cls, path: str):
+        """
+        Load model from path.
+        """
+        saved_variables = torch.load(path)
+        # Create policy object
+        model = cls(**saved_variables["data"])
+        # Load weights
+        model.load_state_dict(saved_variables["state_dict"])
+        return model

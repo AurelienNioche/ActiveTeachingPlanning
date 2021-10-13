@@ -12,11 +12,11 @@ from environments.continuous_teaching import ContinuousTeaching
 
 from human_agents import generate_agents
 
-n_users = 30
-n_items = 30
+N_USERS = 30
+N_ITEMS = 30
 random.seed(123)
-test_users = random.sample(range(0, n_users), 3)
-forget_rates, repetition_rates = generate_agents(n_users, n_items)
+test_users = random.sample(range(0, N_USERS), 3)
+forget_rates, repetition_rates = generate_agents(N_USERS, N_ITEMS)
 
 
 def run_on_test_users(env, policy):

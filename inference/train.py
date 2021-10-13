@@ -9,13 +9,13 @@ from . loss import LossTeaching
 
 def train(
         data,
-        flow_length=16,
-        epochs=5000,
-        optimizer_name="Adam",
-        optimizer_kwargs=None,
-        initial_lr=0.01,
-        n_sample=40,
-        seed=123):
+        flow_length,
+        epochs,
+        optimizer_name,
+        optimizer_kwargs,
+        initial_lr,
+        n_sample,
+        seed):
 
     np.random.seed(seed)
     torch.manual_seed(seed)

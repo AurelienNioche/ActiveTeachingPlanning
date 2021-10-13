@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional, Union, Tuple, List, Type
+from typing import Any, Dict, Optional, Union, Tuple, List
 from functools import partial
 
 import numpy as np

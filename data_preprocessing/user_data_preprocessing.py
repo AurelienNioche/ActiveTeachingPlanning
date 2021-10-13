@@ -106,10 +106,11 @@ def get_preprocessed_data():
     n_w = len(np.unique(w))
     n_o_max = n_o_by_u.max()
     n_o_min = n_o_by_u.min()
-    print("number of user", n_u)
-    print("number of items", n_w)
-    print("total number of observations (excluding first presentation)", n_obs)
-    print("minimum number of observation for a single user", n_o_min)
-    print("maximum number of observation for a single user", n_o_max)
+    print("Data loaded.")
+    print("Number of user", n_u)
+    print("Number of items", n_w)
+    print("Total number of observations (excluding first presentation)", n_obs)
+    print("Minimum number of observation for a single user", n_o_min)
+    print("Maximum number of observation for a single user", n_o_max)
 
     return data

@@ -1,11 +1,6 @@
-import random
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-
-from a2c.a2c import A2C
-from environments.continuous_teaching import ContinuousTeaching
 
 from a2c.a2c import A2C
 from a2c.callback import ProgressBarCallback
@@ -15,12 +10,12 @@ from environments.discontinuous_teaching import DiscontinuousTeaching
 from human_agents import generate_agents
 
 sns.set()
-n_users = 5
-n_items = 30
+N_USERS = 5
+N_ITEMS = 30
 
 
 def produce_rates():
-    global n_items, n_users
+    global N_ITEMS, N_USERS
     forget_rates, repetition_rates = generate_agents(n_users, n_items, 123)
     print("forget", forget_rates.mean())
     print("repeat", repetition_rates.mean())
@@ -36,7 +31,7 @@ def test_save_and_load():
 
 
 def test_continuous_teaching():
-    global n_items
+    global N_ITEMS
 
     forget_rates, repetition_rates = produce_rates()
     env = ContinuousTeaching(
@@ -65,7 +60,7 @@ def test_continuous_teaching():
 
 
 def test_discontinuous_teaching():
-    global n_items
+    global N_ITEMS
 
     forget_rates, repetition_rates = produce_rates()
     env = DiscontinuousTeaching(
