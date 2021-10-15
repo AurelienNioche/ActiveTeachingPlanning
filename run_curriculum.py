@@ -41,7 +41,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
         t_max=100,
         initial_forget_rates=forgets,
         initial_repetition_rates=repetitions,
-        n_item=30,
+        n_item=N_ITEMS,
         tau=0.9,
         delta_coeffs=np.array([3, 20]),
         penalty_coeff=0.2,
@@ -67,11 +67,11 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
 
 
 def main():
-    for i in [2, 3, 4, 5, 8]:
-        print('Running on {}...'.format(i))
+    for gamma in [2, 3, 4, 5, 8]:
+        print(f'Running with gamma={gamma}...')
         model = curriculum_learning(
             reward_type=types['exam_based'],
-            gamma=i,
+            gamma=gamma,
             session_lengths=(20, 50, 100))
         model.save(f'{BKP_FOLDER}/eb21_{COMMIT_NAME}_{i}.p')
 

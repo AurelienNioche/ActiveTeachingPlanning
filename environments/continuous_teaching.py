@@ -57,9 +57,8 @@ class ContinuousTeaching(gym.Env, ABC):
             self.initial_forget_rates = initial_forget_rates[self.current_user]
             self.initial_repetition_rates = initial_repetition_rates[self.current_user]
         else:
-            raise ValueError(
-                "Mismatch between initial_rates shapes and n_item"
-            )
+            err_msg = f"Mismatch between initial_rates shape (forget={initial_forget_rates.shape}; rep={initial_repetition_rates.shape}) and n_item ({n_item})"
+            raise ValueError(err_msg)
         # self.reward_range = (- reward_coeff, reward_coeff)
         self.reward_coeff = reward_coeff
         self.reward_type = reward_type
