@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-import git
-
 from a2c.a2c import A2C
 from a2c.callback import ProgressBarCallback
 
@@ -13,21 +11,10 @@ from environments.continuous_teaching import ContinuousTeaching, types
 from generate_learners.generate_learners import \
     generate_learners_parameterization
 
+from config.run_curriculum import *
+
 sns.set()
 
-N_USERS = 5
-N_ITEMS = 60
-SEED_PARAM_LEARNERS = 123
-
-REPO = git.Repo(search_parent_directories=True)
-GIT_BRANCH = REPO.active_branch.name
-GIT_HASH = REPO.head.commit.hexsha
-COMMIT_NAME = GIT_BRANCH + '_' + GIT_HASH
-
-EXPERIMENT_NAME = ''
-
-BKP_FOLDER = "bkp/curriculum_runs"
-FIG_FOLDER = "fig/curriculum_runs"
 os.makedirs(BKP_FOLDER, exist_ok=True)
 os.makedirs(FIG_FOLDER, exist_ok=True)
 
@@ -59,21 +46,25 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
         with ProgressBarCallback(env, check_freq) as callback:
             m.learn(iterations, callback=callback)
 
-    plt.plot([np.mean(r) for r in callback.hist_rewards])
-    plt.savefig(f'{FIG_FOLDER}/{EXPERIMENT_NAME}_{COMMIT_NAME}_{gamma}.png')
+    means = np.array([np.mean(r) for r in callback.hist_rewards])
+    plt.plot(means)
+    np.savetxt(f'{BKP_FOLDER}/{EXPERIMENT_NAME}_{COMMIT_NAME}_{str(session_lengths)}_{gamma}.csv', means, delimiter=',')
+    plt.savefig(f'{FIG_FOLDER}/{EXPERIMENT_NAME}_{COMMIT_NAME}_{str(session_lengths)}_{gamma}.png')
     plt.clf()
 
     return m
 
 
 def main():
-    for gamma in [2, 3, 4, 5, 8]:
-        print(f'Running with gamma={gamma}...')
-        model = curriculum_learning(
-            reward_type=types['exam_based'],
-            gamma=gamma,
-            session_lengths=(20, 50, 100))
-        model.save(f'{BKP_FOLDER}/eb21_{COMMIT_NAME}_{i}.p')
+    for session_lengths in ALL_SESSION_LENGTHS:
+        for gamma in [2, 3, 4, 5, 8]:
+            print(session_lengths)
+            print(f'Running with gamma={gamma}...')
+            model = curriculum_learning(
+                reward_type=types['exam_based'],
+                gamma=gamma,
+                session_lengths=session_lengths)
+            model.save(f'{BKP_FOLDER}/{EXPERIMENT_NAME}_{COMMIT_NAME}_{str(session_lengths)}_{gamma}.p')
 
 
 if __name__ == "__main__":
