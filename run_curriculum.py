@@ -7,7 +7,8 @@ import numpy as np
 from a2c.a2c import A2C
 from a2c.callback import ProgressBarCallback
 
-from environments.continuous_teaching import ContinuousTeaching, types
+from environments.continuous_teaching import ContinuousTeaching
+from environments import reward_types
 from generate_learners.generate_learners import \
     generate_learners_parameterization
 
@@ -61,7 +62,7 @@ def main():
             print(session_lengths)
             print(f'Running with gamma={gamma}...')
             model = curriculum_learning(
-                reward_type=types['exam_based'],
+                reward_type=reward_types.EXAM_BASED,
                 gamma=gamma,
                 session_lengths=session_lengths)
             model.save(f'{BKP_FOLDER}/{EXPERIMENT_NAME}_{COMMIT_NAME}_{str(session_lengths)}_{gamma}.p')
