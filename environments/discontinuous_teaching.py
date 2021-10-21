@@ -155,11 +155,12 @@ class DiscontinuousTeaching(gym.Env, ABC):
         rep = self.state[view, 1] - 1.
 
         forget_rate = self.initial_forget_rates[view] * \
-              (1 - self.initial_repetition_rates[view]) ** rep
+            (1 - self.initial_repetition_rates[view]) ** rep
         logp_recall = - forget_rate * delta
         reward = self.compute_reward(logp_recall)
 
         time_before_next_iter, done = self.next_delta()
+
         # Probability of recall at the time of the next action
         for i in range(self.delta_coeffs.shape[0]):
             self.obs[view, i] = np.exp(
