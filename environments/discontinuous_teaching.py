@@ -4,7 +4,7 @@ from abc import ABC
 import gym
 import numpy as np
 
-import reward_types
+from environments import reward_types
 
 
 class DiscontinuousTeaching(gym.Env, ABC):

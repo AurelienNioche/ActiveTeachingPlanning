@@ -3,7 +3,7 @@ from abc import ABC
 import gym
 import numpy as np
 
-import reward_types
+from environments import reward_types
 
 
 class ContinuousTeaching(gym.Env, ABC):
@@ -39,6 +39,8 @@ class ContinuousTeaching(gym.Env, ABC):
         self.tau = tau
         self.log_tau = np.log(self.tau)
 
+        self.reward_type = reward_type
+
         # Coeffs for reward computation
         n_coeffs = delta_coeffs.shape[0]
         if n_coeffs < 1:
@@ -48,7 +50,7 @@ class ContinuousTeaching(gym.Env, ABC):
         self.delta_coeffs = delta_coeffs
 
         self.obs_dim = n_coeffs + 2
-        if reward_types == reward_types.EXAM_BASED:
+        if self.reward_type == reward_types.EXAM_BASED:
             self.obs_dim += 1
 
         # repetition rates and one for learned ones
@@ -71,7 +73,6 @@ class ContinuousTeaching(gym.Env, ABC):
             raise ValueError(err_msg)
         # self.reward_range = (- reward_coeff, reward_coeff)
         self.reward_coeff = reward_coeff
-        self.reward_type = reward_type
         self.gamma = gamma
 
     def pick_a_user(self):

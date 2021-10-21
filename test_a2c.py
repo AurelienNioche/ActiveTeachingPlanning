@@ -107,7 +107,7 @@ def main():
     gamma = 8
     reward_type = reward_types.EXAM_BASED
 
-    model = run_continuous_teaching(
+    model = run_discontinuous_teaching(
         reward_type=reward_type,
         gamma=gamma)
     model.save(f'{BKP_FOLDER}/continuous_{COMMIT_NAME}_{gamma}.p')
