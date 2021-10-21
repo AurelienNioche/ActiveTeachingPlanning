@@ -1,4 +1,3 @@
-import random
 from abc import ABC
 
 import gym
@@ -76,7 +75,7 @@ class ContinuousTeaching(gym.Env, ABC):
         self.gamma = gamma
 
     def pick_a_user(self):
-        self.current_user = random.randint(0, self.n_users - 1)
+        self.current_user = np.random.randint(0, self.n_users - 1)
         return self.current_user
 
     def reset(self, user=None):
@@ -117,6 +116,7 @@ class ContinuousTeaching(gym.Env, ABC):
                 reward = n_learned_now / self.n_item
             else:
                 reward = 0
+
         elif self.reward_type == reward_types.EB_EXP:
             reward = 10 ** (n_learned_now / self.n_item)
 
