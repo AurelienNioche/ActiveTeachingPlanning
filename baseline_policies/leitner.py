@@ -90,16 +90,16 @@ class Leitner:
         self._now += time_elapsed
 
     def _get_env_delta(self):
-        return self._env.state[:, 0]
+        return self._env.item_state[:, 0]
 
     def _get_env_n_pres(self):
-        return self._env.state[:, 1]
+        return self._env.item_state[:, 1]
 
     def _get_env_init_forget_rate(self, item):
-        return self._env.all_forget_rates[self._env.current_user, item]
+        return self._env.init_forget_rate[item]
 
     def _get_env_rep_effect(self, item):
-        return self._env.all_repetition_rates[self._env.current_user, item]
+        return self._env.rep_effect[item]
 
     def act(self, obs):
 

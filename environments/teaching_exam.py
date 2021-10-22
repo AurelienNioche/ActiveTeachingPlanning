@@ -34,7 +34,7 @@ class TeachingExam(gym.Env, ABC):
         self.log_thr = np.log(learned_threshold)
 
         # Cognitive parameterization
-        self.init_forget_rate = np.zeros(self.n_item, init_forget_rate)
+        self.init_forget_rate = np.full(self.n_item, init_forget_rate)
         self.rep_effect = np.full(self.n_item, rep_effect)
 
         self.total_iteration = self.n_iter_per_session*self.n_session
@@ -45,7 +45,8 @@ class TeachingExam(gym.Env, ABC):
         self.current_total_iter = 0
         self.current_iter = 0
         self.current_ss = 0
-        self.time_between = 0
+
+        self.time_between = self.time_per_iter
 
         # Current state of the items
         # column 0: number of iteration elapsed since
@@ -84,41 +85,37 @@ class TeachingExam(gym.Env, ABC):
 
         self.current_iter = 0
         self.current_ss = 0
-        self.time_between = 0
+        self.current_total_iter = 0
+
+        self.time_between = self.time_per_iter
+
+        self.reward = 0
+        self.done = False
+
+        self.update_obs()
 
         return self.obs
-
-    def compute_reward(self, log_p_recall):
-
-        if self.current_ss == self.n_session - 1:
-            above_thr = log_p_recall > self.log_thr
-            n_learned_now = np.count_nonzero(above_thr)
-            reward = n_learned_now / self.n_item
-        else:
-            reward = 0
-
-        return reward
 
     def step(self, action):
 
         self.update_item_state(action)
-        self.update_reward_and_obs()
+        self.update_obs()
         self.update_game_state()
+
+        self.update_reward()  # Particular placement
 
         info = {}
         return self.obs, self.reward, self.done, info
 
-    def update_reward_and_obs(self):
+    def update_obs(self):
 
         seen = self.item_state[:, 1] > 0
         unseen = np.invert(seen)
         delta = self.item_state[seen, 0]  # only consider already seen items
         rep = self.item_state[seen, 1] - 1.  # only consider already seen items
+
         forget_rate = self.init_forget_rate[seen] * \
             (1 - self.rep_effect[seen]) ** rep
-
-        self.reward = self.compute_reward(
-            log_p_recall=forget_rate*delta)
 
         if self.current_iter == (self.n_iter_per_session - 1):
             # It will be a break before the next iteration
@@ -152,9 +149,9 @@ class TeachingExam(gym.Env, ABC):
 
     def update_item_state(self, action):
 
-        self.item_state[:, 0] += self.time_between  # add time elapsed since last iter
-        self.item_state[action, 0] = 0               # ...except for item shown
-        self.item_state[action, 1] += 1              # increment nb of presentation
+        self.item_state[:, 0] += self.time_between      # add time elapsed since last iter
+        self.item_state[action, 0] = self.time_between  # ...except for item shown
+        self.item_state[action, 1] += 1                 # increment nb of presentation
 
     @classmethod
     def get_p_recall(cls, obs):
@@ -163,9 +160,8 @@ class TeachingExam(gym.Env, ABC):
 
     def update_game_state(self):
 
-        done = False
-
         self.current_iter += 1
+        self.current_total_iter += 1
         if self.current_iter >= self.n_iter_per_session:
             self.current_iter = 0
             self.current_ss += 1
@@ -173,8 +169,26 @@ class TeachingExam(gym.Env, ABC):
         else:
             time_between = self.time_per_iter
 
-        if self.current_ss >= self.n_session:
+        if self.current_total_iter == self.total_iteration:
             self. done = True
+        else:
+            self.done = False
 
         # for next iteration
         self.time_between = time_between
+
+    def update_reward(self):
+
+        if self.done:
+
+            # self.item_state[:, 0] += self.time_between  # add time elapsed since last iter
+
+            seen = self.item_state[:, 1] > 0
+            delta = self.item_state[seen, 0]  # only consider already seen items
+            rep = self.item_state[seen, 1] - 1.  # only consider already seen items
+            forget_rate = self.init_forget_rate[seen] * \
+                (1 - self.rep_effect[seen]) ** rep
+            log_p_recall = - forget_rate * delta
+            above_thr = log_p_recall > self.log_thr
+            n_learned_now = np.count_nonzero(above_thr)
+            self.reward = n_learned_now / self.n_item
