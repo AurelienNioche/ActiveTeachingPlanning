@@ -292,7 +292,7 @@ class A2C(nn.Module):
 
             self.num_timesteps += 1
 
-            if callback.on_step() is False:
+            if callback is not None and callback.on_step() is False:
                 return False
 
             self.rollout_buffer.add(self._last_obs[0], action, reward,
@@ -310,7 +310,8 @@ class A2C(nn.Module):
             last_value=value,
             done=self._last_done)
 
-        callback.on_rollout_end()
+        if callback is not None:
+            callback.on_rollout_end()
         return True
 
     def learn(
@@ -322,7 +323,8 @@ class A2C(nn.Module):
         total_timesteps, callback = self._setup_learn(
             total_timesteps, callback, reset_num_timesteps)
 
-        callback.on_training_start(total_timesteps)
+        if callback is not None:
+            callback.on_training_start(total_timesteps)
 
         while self.num_timesteps < total_timesteps:
 
@@ -337,7 +339,8 @@ class A2C(nn.Module):
 
             self.update_policy()
 
-        callback.on_training_end()
+        if callback is not None:
+            callback.on_training_end()
         return self
 
     def _setup_learn(
