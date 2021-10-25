@@ -36,7 +36,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
         gamma=gamma
     )
     m = A2C(env)
-    iterations = int(10e6 / len(session_lengths))
+    iterations = int(5 * 10e5 / len(session_lengths))
     check_freq = env.t_max
     for i in range(len(session_lengths)):
         env.t_max = session_lengths[i]
