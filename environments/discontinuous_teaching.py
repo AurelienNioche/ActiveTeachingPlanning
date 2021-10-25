@@ -4,7 +4,7 @@ from abc import ABC
 import gym
 import numpy as np
 
-from .reward_types import types
+from environments import reward_types
 
 
 class DiscontinuousTeaching(gym.Env, ABC):
@@ -22,7 +22,7 @@ class DiscontinuousTeaching(gym.Env, ABC):
             break_length: Union[float, int] = 10,   # 24*60**2
             time_per_iter: Union[float, int] = 1,  # 4
             reward_coeff: float = 1,
-            reward_type=types['monotonic'],
+            reward_type: int = 1,
             gamma=1
     ):
         super().__init__()
@@ -105,32 +105,35 @@ class DiscontinuousTeaching(gym.Env, ABC):
         # if n_learned_now > 0:
         #     penalizing_factor /= n_learned_now
 
-        if self.reward_type == types['monotonic']:
+        if self.reward_type == reward_types.MONOTONIC:
             learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
             if learned_diff > 0:
                 reward = n_learned_now / (self.gamma * self.n_iter_per_session)
             else:
                 reward = learned_diff
 
-        elif self.reward_type == types['mean_learned']:
+        elif self.reward_type == reward_types.MEAN_LEARNED:
             penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
             # penalizing_factor /= n_learned_now
 
             reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
                      + self.penalty_coeff * penalizing_factor
 
-        elif self.reward_type == types['exam_based']:
+        elif self.reward_type == reward_types.EXAM_BASED:
             reward = 10 ** (n_learned_now / self.n_item)
 
-        elif self.reward_type == types['base']:
+        elif self.reward_type == reward_types.BASE:
             reward = n_learned_now / self.n_item
 
-        elif self.reward_type == types['avoid_forget']:
+        elif self.reward_type == reward_types.AVOID_FORGET:
             session_progression = self.session_progression()
             reward = n_learned_now / self.n_item
             if session_progression == 0:
                 learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
                 reward += min(learned_diff, 0) * self.gamma
+
+        else:
+            raise ValueError("Reward type not recognized")
 
         reward *= self.reward_coeff
 

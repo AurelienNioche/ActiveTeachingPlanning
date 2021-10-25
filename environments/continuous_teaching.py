@@ -1,10 +1,9 @@
-import random
 from abc import ABC
 
 import gym
 import numpy as np
 
-from .reward_types import types
+from environments import reward_types
 
 
 class ContinuousTeaching(gym.Env, ABC):
@@ -20,19 +19,29 @@ class ContinuousTeaching(gym.Env, ABC):
             time_per_iter=1,
             penalty_coeff: float = 0.2,
             reward_coeff: float = 1,
-            reward_type=types['monotonic'],
+            reward_type: int = 1,
             gamma=1
     ):
         super().__init__()
 
+        # Action space
         self.action_space = gym.spaces.Discrete(n_item)
+
+        # learner state: probability of recall at 2 time points
         self.state = np.zeros((n_item, 2))
+
+        # Task parameter
         self.n_item = n_item
         self.t_max = t_max
         self.time_per_iter = time_per_iter
+
+        # Threshold for reward computation
         self.tau = tau
         self.log_tau = np.log(self.tau)
 
+        self.reward_type = reward_type
+
+        # Coeffs for reward computation
         n_coeffs = delta_coeffs.shape[0]
         if n_coeffs < 1:
             raise ValueError(
@@ -40,7 +49,10 @@ class ContinuousTeaching(gym.Env, ABC):
             )
         self.delta_coeffs = delta_coeffs
 
-        self.obs_dim = n_coeffs + 2 + (1 if reward_type == types['exam_based'] else 0) # one for
+        self.obs_dim = n_coeffs + 2
+        if self.reward_type == reward_types.EXAM_BASED:
+            self.obs_dim += 1
+
         # repetition rates and one for learned ones
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
@@ -61,11 +73,10 @@ class ContinuousTeaching(gym.Env, ABC):
             raise ValueError(err_msg)
         # self.reward_range = (- reward_coeff, reward_coeff)
         self.reward_coeff = reward_coeff
-        self.reward_type = reward_type
         self.gamma = gamma
 
     def pick_a_user(self):
-        self.current_user = random.randint(0, self.n_users - 1)
+        self.current_user = np.random.randint(0, self.n_users - 1)
         return self.current_user
 
     def reset(self, user=None):
@@ -91,23 +102,27 @@ class ContinuousTeaching(gym.Env, ABC):
         above_thr = logp_recall > self.log_tau
         n_learned_now = np.count_nonzero(above_thr)
 
-        if self.reward_type == types['monotonic']:
+        if self.reward_type == reward_types.MONOTONIC:
             learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
             reward = learned_diff
 
-        elif self.reward_type == types['mean_learned']:
+        elif self.reward_type == reward_types.MEAN_LEARNED:
             penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
 
             reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
                      + self.penalty_coeff * penalizing_factor
 
-        elif self.reward_type == types['exam_based']:
+        elif self.reward_type == reward_types.EXAM_BASED:
             if self.t > 0 and (self.t % (self.t_max // self.gamma) == 0 or self.t == self.t_max - 1):
                 reward = n_learned_now / self.n_item
             else:
                 reward = 0
-        elif self.reward_type == types['eb_exp']:
+
+        elif self.reward_type == reward_types.EB_EXP:
             reward = 10 ** (n_learned_now / self.n_item)
+
+        else:
+            raise ValueError("Reward type not recognized")
 
         reward *= self.reward_coeff
         self.learned_before = above_thr
@@ -125,7 +140,7 @@ class ContinuousTeaching(gym.Env, ABC):
         delta = self.state[view, 0]  # only consider already seen items
         rep = self.state[view, 1] - 1.  # only consider already seen items
         forget_rate = self.initial_forget_rates[view] * \
-                      (1 - self.initial_repetition_rates[view]) ** rep
+            (1 - self.initial_repetition_rates[view]) ** rep
         logp_recall = - forget_rate * delta
 
         reward = self.compute_reward(logp_recall)
@@ -137,7 +152,7 @@ class ContinuousTeaching(gym.Env, ABC):
                 (self.delta_coeffs[i] * delta + self.time_per_iter)
             )
 
-        if self.reward_type == types['exam_based']:
+        if self.reward_type == reward_types.EXAM_BASED:
             self.obs[view, 4] = np.exp(logp_recall) > self.log_tau
 
         info = {}

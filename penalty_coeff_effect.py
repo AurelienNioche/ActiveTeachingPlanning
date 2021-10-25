@@ -10,17 +10,22 @@ from a2c.callback import ProgressBarCallback
 
 from environments.continuous_teaching import ContinuousTeaching
 
-from human_agents import generate_agents
+from generate_learners.generate_learners \
+    import generate_learners_parameterization
 
 N_USERS = 30
 N_ITEMS = 30
-random.seed(123)
+SEED = 123
+
 test_users = random.sample(range(0, N_USERS), 3)
-forget_rates, repetition_rates = generate_agents(N_USERS, N_ITEMS)
+forget_rates, repetition_rates = \
+    generate_learners_parameterization(N_USERS, N_ITEMS)
+
+random.seed(SEED)
 
 
 def run_on_test_users(env, policy):
-    global test_users
+
     rewards = []
     actions = []
     for user in test_users:
@@ -34,7 +39,7 @@ def run_on_test_users(env, policy):
             actions.append(action)
 
             if done:
-                obs = env.reset()
+                env.reset()
                 break
 
     return rewards, actions
@@ -53,7 +58,7 @@ def optimize_agent(trial, ):
         Optuna maximises the negative log likelihood, so we
         need to negate the reward here
     """
-    global forget_rates, repetition_rates
+
     env_params = optimize_coeff(trial)
 
     env = ContinuousTeaching(
@@ -61,7 +66,6 @@ def optimize_agent(trial, ):
         tau=0.9,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
-        n_coeffs=2,
         delta_coeffs=np.array([40, 7]),
         **env_params
     )
