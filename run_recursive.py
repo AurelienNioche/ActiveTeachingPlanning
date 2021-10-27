@@ -1,46 +1,12 @@
 from a2c.a2c import A2C
 from environments.supervisor_env import SupervisorEnv
-
-#
-# class SupervisorCallback:
-#
-#     def __init__(self):
-#
-#         self.model = None
-#
-#     def init_callback(self, model) -> None:
-#         """
-#         Initialize the callback by saving references to the
-#         RL model
-#         """
-#         self.model = model
-#
-#     def on_training_start(self, total_timesteps) -> None:
-#         pass
-#
-#     def on_training_end(self) -> None:
-#         pass
-#
-#     def on_rollout_start(self) -> None:
-#         pass
-#
-#     def on_rollout_end(self) -> None:
-#         pass
-#
-#     def on_step(self):
-#         """
-#         This method will be called by the model after each call to ``env.step()``.
-#         :return: If the callback returns False, training is aborted early.
-#         """
-#
-#         self.model.env.
-#         return True
+from a2c.callback.supervisor import SupervisorCallback
 
 
 def teach_the_teacher():
-
-    supervisor = A2C(env=SupervisorEnv())
-    supervisor.learn(total_timesteps=10000)
+    supervisor = A2C(env=SupervisorEnv(teaching_iterations=int(1e4)), n_steps=1)
+    with SupervisorCallback(freq_save=500) as callback:
+        supervisor.learn(total_timesteps=int(1e4),  callback=callback)
 
 
 def main():

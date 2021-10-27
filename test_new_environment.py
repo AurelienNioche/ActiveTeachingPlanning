@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 
 from a2c.a2c import A2C
-from a2c.callback import ProgressBarCallback
+from a2c.callback.teacher import TeacherCallback
 from environments.teaching_exam import TeachingExam
 from baseline_policies.leitner import Leitner
 from baseline_policies.threshold import Threshold
@@ -52,9 +52,15 @@ def main():
         time_per_iter=1,
         break_length=1)
 
+    # Run Leitner ---------------------------------
+
+    env.reset()
+
     policy = Leitner(env=env, delay_min=1, delay_factor=2)
 
     run(env=env, policy=policy)
+
+    # Run Threshold ---------------------------------
 
     env.reset()
 
@@ -62,35 +68,22 @@ def main():
 
     run(env=env, policy=policy)
 
+    # Run A2C ---------------------------------------
+
     env.reset()
 
     policy = A2C(env)
 
-    # iterations = env.t_max * 5e5
     iterations = int(1e6)
     check_freq = env.total_iteration
 
-    with ProgressBarCallback(env, check_freq) as callback:
+    with TeacherCallback(env, check_freq) as callback:
         policy.learn(iterations, callback=callback)
 
     plt.plot([np.mean(r) for r in callback.hist_rewards])
     plt.show()
 
     run(env=env, policy=policy)
-
-    # m = A2C(env)
-    #
-    # # iterations = env.t_max * 5e5
-    # iterations = int(10e6)
-    # check_freq = env.total_iteration
-    #
-    # with ProgressBarCallback(env, check_freq) as callback:
-    #     m.learn(iterations, callback=callback)
-    #
-    # plt.plot([np.mean(r) for r in callback.hist_rewards])
-    # plt.show()
-
-    # teacher = A2C(env=env)
 
 
 if __name__ == "__main__":

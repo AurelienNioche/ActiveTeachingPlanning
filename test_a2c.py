@@ -7,7 +7,7 @@ import numpy as np
 import git
 
 from a2c.a2c import A2C
-from a2c.callback import ProgressBarCallback
+from a2c.callback.teacher import TeacherCallback
 
 from environments.continuous_teaching import ContinuousTeaching
 from environments.discontinuous_teaching import DiscontinuousTeaching
@@ -63,7 +63,7 @@ def run_discontinuous_teaching(reward_type, gamma):
     iterations = env_t_max * 30000
     check_freq = env_t_max
 
-    with ProgressBarCallback(env, check_freq) as callback:
+    with TeacherCallback(env, check_freq) as callback:
         m.learn(iterations, callback=callback)
 
     plt.plot([np.mean(r) for r in callback.hist_rewards])
@@ -94,7 +94,7 @@ def run_continuous_teaching(reward_type, gamma=1):
     iterations = int(10e6)
     check_freq = env.t_max
 
-    with ProgressBarCallback(env, check_freq) as callback:
+    with TeacherCallback(env, check_freq) as callback:
         m.learn(iterations, callback=callback)
 
     plt.plot([np.mean(r) for r in callback.hist_rewards])

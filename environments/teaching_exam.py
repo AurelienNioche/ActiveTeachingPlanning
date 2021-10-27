@@ -159,6 +159,7 @@ class TeachingExam(gym.Env, ABC):
         return obs[:, 0]
 
     def update_game_state(self):
+        # print(self.current_total_iter, self.total_iteration)
 
         self.current_iter += 1
         self.current_total_iter += 1

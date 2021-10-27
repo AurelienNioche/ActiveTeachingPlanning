@@ -12,12 +12,14 @@ import gym
 from gym import spaces
 
 from . nn import MlpExtractor
-from . distribution import CategoricalDistribution
+from . distribution import CategoricalDistribution, DiagGaussianDistribution
 
 from . rollout import RolloutBuffer
-from . callback import ProgressBarCallback
+from . callback.supervisor import SupervisorCallback
+from . callback.teacher import TeacherCallback
+from . callback.progress_bar import SimpleProgressBarCallback
 
-MaybeCallback = Union[ProgressBarCallback, None]
+MaybeCallback = Union[SimpleProgressBarCallback, TeacherCallback, SupervisorCallback, None]
 
 
 class FlattenExtractor(nn.Module):
@@ -65,8 +67,10 @@ class A2C(nn.Module):
     :param max_grad_norm: The maximum value for the gradient clipping
     :param normalize_advantage: Whether to normalize or not the advantage
     :param net_arch: The specification of the policy and value networks.
-    :param activation_fn: Activation function
+    :param activation_fn_name: Name of the activation function
     :param ortho_init: Whether to use or not orthogonal initialization
+    # :param squash_output: For continuous actions, whether the output is squashed
+    #     or not using a ``tanh()`` function.
     :param seed: Seed for the pseudo random generators
     """
 
@@ -87,6 +91,8 @@ class A2C(nn.Module):
         net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
         activation_fn_name: str = "Tanh",
         ortho_init: bool = True,
+        log_std_init: float = 0.0,
+        # squash_output: bool = False,
         seed: int = 123,
     ):
 
@@ -124,6 +130,10 @@ class A2C(nn.Module):
         # Constant learning rate
         self.constant_lr = constant_lr
 
+        # Matters for continuous action space only ('Box')
+        self.log_std_init = log_std_init
+        # self.squash_output = squash_output
+
         # Seed numpy RNG
         np.random.seed(seed)
         # seed torch RNG
@@ -146,9 +156,6 @@ class A2C(nn.Module):
         activation_fn = getattr(torch.nn, activation_fn_name)
         self.ortho_init = ortho_init
 
-        # Action distribution
-        self.action_dist = CategoricalDistribution(self.action_space.n)
-
         self.features_extractor = FlattenExtractor(self.observation_space)
         features_dim = self.features_extractor.features_dim
 
@@ -158,8 +165,20 @@ class A2C(nn.Module):
             activation_fn=activation_fn)
 
         latent_dim_pi = self.mlp_extractor.latent_dim_pi
-        self.action_net = self.action_dist.proba_distribution_net(
-            latent_dim=latent_dim_pi)
+
+        # Action distribution
+        if isinstance(self.action_space, spaces.Discrete):
+            self.action_dist = CategoricalDistribution(self.action_space.n)
+            self.action_net = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi)
+        elif isinstance(self.action_space, spaces.Box):
+            assert len(self.action_space.shape) == 1, "Error: the action space must be a vector"
+            self.action_dist = DiagGaussianDistribution(self.action_space.shape[0])
+            self.action_net, self.log_std = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi,
+                log_std_init=self.log_std_init)
+        else:
+            raise Exception("Action space not compatible with current implementation")
 
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # Init weights: use orthogonal initialization
@@ -283,8 +302,19 @@ class A2C(nn.Module):
                 action, value, log_prob = self.forward(obs_tensor)
             action = action.numpy()
 
+            clipped_action = action
+            # if self.squash_output:
+            #     # Rescale to proper domain when using squashing
+            #     actions = self.unscale_action(actions)
+            # else:
+            #     # Actions could be on arbitrary scale, so clip the actions to avoid
+            #     # out of bound error (e.g. if sampling from a Gaussian distribution)
+            # Clip the actions to avoid out of bound error
+            if isinstance(self.action_space, gym.spaces.Box):
+                clipped_action = np.clip(action, self.action_space.low, self.action_space.high)
+
             # Perform action
-            new_obs, reward, done, _ = self.env.step(action)
+            new_obs, reward, done, _ = self.env.step(clipped_action)
             if done:
                 new_obs = self.env.reset()
 
@@ -405,7 +435,7 @@ class A2C(nn.Module):
         latent_pi, latent_vf = self.mlp_extractor(features)
         return latent_pi, latent_vf
 
-    def _get_action_dist_from_latent(self, latent_pi: torch.Tensor) -> CategoricalDistribution:
+    def _get_action_dist_from_latent(self, latent_pi: torch.Tensor) -> Union[CategoricalDistribution, DiagGaussianDistribution]:
         """
         Retrieve action distribution given the latent codes.
 
@@ -413,9 +443,32 @@ class A2C(nn.Module):
         :return: Action distribution
         """
         mean_actions = self.action_net(latent_pi)
-        assert isinstance(self.action_dist, CategoricalDistribution), "Invalid action distribution"
-        # Here mean_actions are the logits before the softmax
-        return self.action_dist.proba_distribution(action_logits=mean_actions)
+        if isinstance(self.action_dist, CategoricalDistribution):
+            # Here mean_actions are the logits before the softmax
+            return self.action_dist.proba_distribution(action_logits=mean_actions)
+        elif isinstance(self.action_dist, DiagGaussianDistribution):
+            return self.action_dist.proba_distribution(mean_actions, self.log_std)
+        else:
+            raise ValueError("Action distribution not compatible with the current implementation")
+
+    # def scale_action(self, action: np.ndarray) -> np.ndarray:
+    #     """
+    #     Rescale the action from [low, high] to [-1, 1]
+    #     (no need for symmetric action space)
+    #     :param action: Action to scale
+    #     :return: Scaled action
+    #     """
+    #     low, high = self.action_space.low, self.action_space.high
+    #     return 2.0 * ((action - low) / (high - low)) - 1.0
+    #
+    # def unscale_action(self, scaled_action: np.ndarray) -> np.ndarray:
+    #     """
+    #     Rescale the action from [-1, 1] to [low, high]
+    #     (no need for symmetric action space)
+    #     :param scaled_action: Action to un-scale
+    #     """
+    #     low, high = self.action_space.low, self.action_space.high
+    #     return low + (0.5 * (scaled_action + 1.0) * (high - low))
 
     def predict(
         self,
@@ -441,8 +494,18 @@ class A2C(nn.Module):
             actions = distribution.get_actions(deterministic=deterministic)
 
         # Convert to numpy
-        actions = actions.cpu().numpy()
-        assert not isinstance(self.action_space, gym.spaces.Box), "should not be box"
+        actions = actions.numpy()
+
+        # In case of continuous actions
+        if isinstance(self.action_space, gym.spaces.Box):
+            # if self.squash_output:
+            #     # Rescale to proper domain when using squashing
+            #     actions = self.unscale_action(actions)
+            # else:
+            # Actions could be on arbitrary scale, so clip the actions to avoid
+            # out of bound error (e.g. if sampling from a Gaussian distribution)
+            actions = np.clip(actions, self.action_space.low,
+                              self.action_space.high)
 
         return actions
 
@@ -483,6 +546,7 @@ class A2C(nn.Module):
             max_grad_norm=self.max_grad_norm,
             normalize_advantage=self.normalize_advantage,
             ortho_init=self.ortho_init,
+            log_std_init=self.log_std_init,
             net_arch=self.net_arch,
             activation_fn_name=self.activation_fn_name,
             seed=self.seed)
