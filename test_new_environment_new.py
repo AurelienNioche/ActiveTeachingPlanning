@@ -28,10 +28,6 @@ def run(env, policy, seed=123):
             actions.append(action)
             pb.update()
             if done:
-                # # Simulate exam
-                # obs, reward, done, _ = env.step(None)
-                # rewards.append(reward)
-
                 break
 
     final_n_learned = rewards[-1] * env.n_item
@@ -90,8 +86,8 @@ def main():
     torch.manual_seed(seed_a2c)
 
     buffer_size = env.n_session*env.n_iter_per_session
-    # policy = A2C(env=env, buffer_size=buffer_size)
-    policy = OldA2C(env=env, n_steps=buffer_size)
+    policy = A2C(env=env, buffer_size=buffer_size)
+    # policy = OldA2C(env=env, n_steps=buffer_size)
 
     with TeacherExamCallback() as callback:
         policy.learn(iterations, callback=callback)

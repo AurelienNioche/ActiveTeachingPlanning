@@ -131,3 +131,4 @@ dmypy.json
 .idea/
 /bkp/curriculum_runs/
 /bkp/supervisor/
+/bkp/optuna.db

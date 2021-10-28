@@ -14,6 +14,7 @@ class SupervisorEnv(gym.Env, ABC):
     def __init__(
             self,
             teaching_iterations=int(1e6),
+            teaching_n_steps=None,
             n_iter_per_session=10,
             init_forget_rate=0.02,
             rep_effect=0.2,
@@ -41,7 +42,10 @@ class SupervisorEnv(gym.Env, ABC):
         self.teacher_env = TeacherEnv(n_iter_per_session=n_iter_per_session,
                                       **self.teacher_env_kwargs)
 
-        self.teacher = A2C(env=self.teacher_env)
+        if teaching_n_steps is None:
+            teaching_n_steps = n_iter_per_session*n_session
+        self.teacher = A2C(env=self.teacher_env,
+                           n_steps=teaching_n_steps)
 
         obs_dim = len(self.get_teacher_parameters())
         self.observation_space = gym.spaces.Box(
@@ -58,7 +62,8 @@ class SupervisorEnv(gym.Env, ABC):
 
         return self.get_teacher_parameters()
 
-    def get_n_iter(self, action):
+    @staticmethod
+    def get_n_iter(action):
         action = action[0, 0]
         action = math.tanh(action)
         low, high = -49, 49
@@ -73,6 +78,9 @@ class SupervisorEnv(gym.Env, ABC):
         self.teacher_env = TeacherEnv(n_iter_per_session=self.n_iter,
                                       **self.teacher_env_kwargs)
         self.teacher.env = self.teacher_env
+        n_steps = self.teacher_env.n_iter_per_session * self.teacher_env.n_session
+        self.teacher.n_steps = n_steps
+        self.teacher.rollout_buffer.buffer_size = n_steps
 
         self.train_teacher()
 
@@ -111,6 +119,9 @@ class SupervisorEnv(gym.Env, ABC):
 
     def train_teacher(self):
 
+        # print("TRAIN", "*" * 20)
+
         self.teacher.learn(self.teaching_iterations, callback=None)
 
+        # print("END TRAIN", "*" * 20)
 

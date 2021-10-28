@@ -64,7 +64,7 @@ class TeachingExam(gym.Env, ABC):
         #           the threshold (expressed proportionally
         #           to the total number of iteration)
         #           assuming that it is presented at the next iteration
-        self.memory_state = np.zeros((self.n_item, 3))
+        self.memory_state = np.zeros((self.n_item, 2))
 
         # Observation vector as given to the RL agent
         # +1 because we give the progress
@@ -89,8 +89,8 @@ class TeachingExam(gym.Env, ABC):
 
         self.time_between = self.time_per_iter
 
-        self.reward = 0
-        self.done = False
+        # self.reward = 0
+        # self.done = False
 
         self.update_obs()
 
@@ -134,15 +134,15 @@ class TeachingExam(gym.Env, ABC):
         unseen_f_rate_if_action = self.init_forget_rate[unseen]
         unseen_survival_if_action = - self.log_thr / unseen_f_rate_if_action
 
-        self.memory_state[:, 0] = seen
-        self.memory_state[seen, 1] = survival
-        self.memory_state[unseen, 1] = 0.
-        self.memory_state[seen, 2] = seen_survival_if_action
-        self.memory_state[unseen, 2] = unseen_survival_if_action
+        # self.memory_state[:, 0] = seen
+        self.memory_state[seen, 0] = survival
+        self.memory_state[unseen, 0] = 0.
+        self.memory_state[seen, 1] = seen_survival_if_action
+        self.memory_state[unseen, 1] = unseen_survival_if_action
 
         progress = (self.current_total_iter + 1) / self.total_iteration
 
-        self.memory_state[:, 1:3] /= self.total_iteration
+        self.memory_state[:, :] /= self.total_iteration
 
         self.obs[:-1] = self.memory_state.flatten()
         self.obs[-1] = progress
@@ -193,3 +193,6 @@ class TeachingExam(gym.Env, ABC):
             above_thr = log_p_recall > self.log_thr
             n_learned_now = np.count_nonzero(above_thr)
             self.reward = n_learned_now / self.n_item
+
+        else:
+            self.reward = 0
