@@ -543,7 +543,7 @@ class A2C(nn.Module):
             learning_rate=self.learning_rate,
             optimizer_name=self.optimizer_name,
             optimizer_kwargs=self.optimizer_kwargs,
-            n_steps=self.n_steps,
+            buffer_size=self.buffer_size,
             gamma=self.gamma,
             gae_lambda=self.gae_lambda,
             ent_coef=self.ent_coef,

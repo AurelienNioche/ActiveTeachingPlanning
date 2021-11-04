@@ -1,10 +1,8 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from tqdm import tqdm
 
 from a2c.a2c import A2C
-from a2c.old_a2c import A2C as OldA2C
 from a2c.callback.teacher_exam import TeacherExamCallback
 from environments.teaching_exam import TeachingExam
 from baseline_policies.leitner import Leitner
@@ -35,7 +33,7 @@ def run(env, policy, seed=123):
     print(f"{policy.__class__.__name__.lower()} | "
           f"final reward {int(final_n_learned)} | "
           f"precision {final_n_learned / n_view:.2f}")
-    return actions, rewards
+    return rewards * env.n_item
 
 
 def main():
@@ -50,7 +48,7 @@ def main():
     #            => works (final reward=9 | Leitner=8 | Myopic=9)
 
     # For A2C only
-    iterations = int(1e6)
+    iterations = int(5e6)
     seed_a2c = 123
 
     # For everyone
@@ -60,7 +58,7 @@ def main():
         n_item=20,
         learned_threshold=0.9,
         n_session=1,
-        n_iter_per_session=30,
+        n_iter_per_session=100,
         time_per_iter=1,
         break_length=1)
 
@@ -87,12 +85,14 @@ def main():
 
     buffer_size = env.n_session*env.n_iter_per_session
     policy = A2C(env=env, buffer_size=buffer_size)
-    # policy = OldA2C(env=env, n_steps=buffer_size)
 
     with TeacherExamCallback() as callback:
         policy.learn(iterations, callback=callback)
 
-    run(env=env, policy=policy)
+    bkp_folder = "bkp/test_new_environment"
+    policy.save(f'{bkp_folder}/policy.p')
+    rewards = run(env=env, policy=policy)
+    np.save(file=f'{bkp_folder}/rewards.npy', arr=np.asarray(rewards))
 
 
 if __name__ == "__main__":

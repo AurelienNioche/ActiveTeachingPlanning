@@ -14,35 +14,11 @@ from gym import spaces
 from . nn import MlpExtractor
 from . distribution import CategoricalDistribution, DiagGaussianDistribution
 
-from . rollout import RolloutBuffer
 from . callback.supervisor import SupervisorCallback
 from . callback.teacher import TeacherCallback
 from . callback.progress_bar import SimpleProgressBarCallback
 
-from baseline_policies.threshold import Threshold
-
 MaybeCallback = Union[SimpleProgressBarCallback, TeacherCallback, SupervisorCallback, None]
-
-
-class FlattenExtractor(nn.Module):
-    """
-    Feature extract that flatten the input.
-    Used as a placeholder when feature extraction is not needed.
-
-    :param observation_space:
-    """
-
-    def __init__(self, observation_space: gym.Space):
-        super().__init__()
-
-        self._observation_space = observation_space
-        self.features_dim = spaces.utils.flatdim(observation_space)
-        assert self.features_dim > 0
-
-        self.flatten = nn.Flatten()
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        return self.flatten(observations)
 
 
 class A2C(nn.Module):
@@ -67,7 +43,7 @@ class A2C(nn.Module):
     :param ent_coef: Entropy coefficient for the loss calculation
     :param vf_coef: Value function coefficient for the loss calculation
     :param max_grad_norm: The maximum value for the gradient clipping
-    :param normalize_advantage: Whether to normalize or not the advantage
+    # :param normalize_advantage: Whether to normalize or not the advantage
     :param net_arch: The specification of the policy and value networks.
     :param activation_fn_name: Name of the activation function
     :param ortho_init: Whether to use or not orthogonal initialization
@@ -83,13 +59,13 @@ class A2C(nn.Module):
         constant_lr: bool = False,
         optimizer_name: str = "RMSprop",
         optimizer_kwargs: dict = None,
-        n_steps: int = 5,
+        buffer_size: int = 5,
         gamma: float = 0.99,
         gae_lambda: float = 1.0,
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         max_grad_norm: float = 0.5,
-        normalize_advantage: bool = False,
+        # normalize_advantage: bool = False,
         net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
         activation_fn_name: str = "Tanh",
         ortho_init: bool = True,
@@ -120,14 +96,14 @@ class A2C(nn.Module):
                                   dtype=np.float32)
         self._last_done = False
 
-        self.n_steps = n_steps
+        self.buffer_size = buffer_size
         self.gamma = gamma
         self.gae_lambda = gae_lambda
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
 
-        self.normalize_advantage = normalize_advantage
+        # self.normalize_advantage = normalize_advantage
 
         # Constant learning rate
         self.constant_lr = constant_lr
@@ -144,11 +120,10 @@ class A2C(nn.Module):
         self.action_space.seed(seed)
         self.env.seed(seed)
 
-        self.rollout_buffer = RolloutBuffer(
-            self.n_steps,
-            obs_shape=self.observation_space.shape,
-            gamma=self.gamma,
-            gae_lambda=self.gae_lambda)
+        self.actions = None
+        self.rewards = None
+        self.dones = None
+        self.observations = None
 
         # Default network architecture, from stable-baselines
         if net_arch is None:
@@ -158,9 +133,7 @@ class A2C(nn.Module):
         activation_fn = getattr(torch.nn, activation_fn_name)
         self.ortho_init = ortho_init
 
-        self.features_extractor = FlattenExtractor(self.observation_space)
-        features_dim = self.features_extractor.features_dim
-
+        features_dim = spaces.utils.flatdim(self.observation_space)
         self.mlp_extractor = MlpExtractor(
             features_dim,
             net_arch=self.net_arch,
@@ -190,7 +163,7 @@ class A2C(nn.Module):
             # features_extractor/mlp values are
             # originally from openai/baselines (default gains/init_scales).
             module_gains = {
-                self.features_extractor: np.sqrt(2),
+                # self.features_extractor: np.sqrt(2),
                 self.mlp_extractor: np.sqrt(2),
                 self.action_net: 0.01,
                 self.value_net: 1,
@@ -239,30 +212,73 @@ class A2C(nn.Module):
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = self.learning_rate
 
-        # This will only loop once (get all data in one go)
-        rollout_data = self.rollout_buffer.get()
+        indices = np.random.permutation(self.buffer_size)
 
-        actions = rollout_data.actions
+        observations = torch.as_tensor(self.observations[indices])
+        actions = torch.as_tensor(self.actions[indices])
         # Convert discrete action from float to long
         actions = actions.long().flatten()
 
-        # TODO: avoid second computation of everything because of the gradient
         values, log_prob, entropy = self.evaluate_actions(
-            rollout_data.observations, actions)
+            observations, actions)
         values = values.flatten()
 
-        # Normalize advantage (not present in the original implementation)
-        advantages = rollout_data.advantages
-        if self.normalize_advantage:
-            advantages = \
-                (advantages - advantages.mean()) \
-                / (advantages.std() + 1e-8)
+        # Compute advantages
+        with torch.no_grad():
+
+            # Compute value for the last timestep
+            obs_tensor = torch.as_tensor(self._last_obs)
+            _, last_value, _ = self.forward(obs_tensor)
+
+            done = self._last_done
+            last_value = last_value.numpy()
+
+        rewards = self.rewards
+        dones = self.dones
+        detached_values = np.zeros_like(self.actions)
+        advantages = np.zeros_like(self.actions)
+        detached_values[:] = values.detach().clone().numpy().flatten()[np.argsort(indices)]
+
+        last_gae_lam = 0
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - done
+                next_values = last_value
+            else:
+                next_non_terminal = 1.0 - dones[step + 1]
+                next_values = detached_values[step + 1]
+            delta = rewards[step] + self.gamma * next_values * next_non_terminal - detached_values[step]
+            last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+            advantages[step] = last_gae_lam
+
+        returns = advantages + detached_values
+
+        tensor_advantages = torch.as_tensor(advantages[indices].flatten())
+        tensor_returns = torch.as_tensor(returns[indices])
+
+        # # Normalize advantage (not present in the original implementation)
+        # if self.normalize_advantage:
+        #     advantages = \
+        #         (advantages - advantages.mean()) \
+        #         / (advantages.std() + 1e-8)
 
         # Policy gradient loss
-        policy_loss = -(advantages * log_prob).mean()
+        policy_loss = -(tensor_advantages * log_prob).mean()
 
         # Value loss using the TD(gae_lambda) target
-        value_loss = F.mse_loss(rollout_data.returns, values)
+        value_loss = F.mse_loss(tensor_returns, values)
+
+        # if self.num_timesteps >= 188910:
+        #     print(self.num_timesteps, "value loss", value_loss, "policy loss",
+        #           policy_loss)
+        #     print("returns",
+        #           " ".join([f'{v:.3f}' for v in returns]))
+        #     print("advantages",
+        #           " ".join([f'{v:.3f}' for v in advantages]))
+        #     print("log_prob",
+        #           " ".join([f'{v:.3f}' for v in log_prob.detach().numpy()]))
+        #     print("actions",
+        #           " ".join([f'{v}' for v in self.actions]))
 
         # Entropy loss favor exploration
         entropy_loss = -torch.mean(entropy)
@@ -280,61 +296,49 @@ class A2C(nn.Module):
                                  self.max_grad_norm)
         self.optimizer.step()
 
-    def collect_rollouts(self, callback: MaybeCallback) -> bool:
+    def collect_rollouts(self,
+                         rollout_policy: Union[object, None],
+                         callback: MaybeCallback) -> bool:
         """
         Collect experiences using the current policy and fill a ``RolloutBuffer``.
         The term rollout here refers to the model-free notion and should not
         be used with the concept of rollout used in model-based RL or planning.
         :param callback: Callback that will be called at each step
             (and at the beginning and end of the rollout)
+        :param rollout_policy: If not None, the policy to use
         :return: True if function returned with at least `n_steps`
             collected, False if callback terminated rollout prematurely.
         """
         assert self._last_obs is not None, "No previous observation was provided"
 
-        self.rollout_buffer.reset()
+        obs_shape = self.observation_space.shape
+        self.actions = np.zeros(self.buffer_size, dtype=np.float32)
+        self.rewards = np.zeros_like(self.actions)
+        self.dones = np.zeros_like(self.actions)
+        self.observations = np.zeros((self.buffer_size,) + obs_shape, dtype=np.float32)
+
         if callback is not None:
             callback.on_rollout_start()
 
-        self._last_obs = env.reset()
+        for i in range(self.buffer_size):
 
-        obs = self.env.reset()
-        policy = Threshold(env=self.env)
+            if rollout_policy is None:
+                with torch.no_grad():
+                    # Convert to pytorch tensor
+                    obs_tensor = torch.as_tensor(self._last_obs)
+                    action, value, log_prob = self.forward(obs_tensor)
+                action = action.numpy()
 
-        reward = None
-
-        while True:
-            action = policy.act(obs)
-            obs, reward, done, _ = self.env.step(action)
-
-            if done:
-                break
-
-        for _ in range(self.n_steps):
-
-            with torch.no_grad():
-                # Convert to pytorch tensor
-                obs_tensor = torch.as_tensor(self._last_obs)
-                action, value, log_prob = self.forward(obs_tensor)
-            action = action.numpy()
-
-            clipped_action = action
-            # if self.squash_output:
-            #     # Rescale to proper domain when using squashing
-            #     actions = self.unscale_action(actions)
-            # else:
-            #     # Actions could be on arbitrary scale, so clip the actions to avoid
-            #     # out of bound error (e.g. if sampling from a Gaussian distribution)
-            # Clip the actions to avoid out of bound error
-            if isinstance(self.action_space, gym.spaces.Box):
-                clipped_action = np.clip(action, self.action_space.low, self.action_space.high)
+                # Clip the actions to avoid out of bound error
+                if isinstance(self.action_space, gym.spaces.Box):
+                    action = np.clip(action, self.action_space.low, self.action_space.high)
+            else:
+                action = rollout_policy.act(self._last_obs)
 
             # Perform action
-            new_obs, reward, done, _ = self.env.step(clipped_action)
+            new_obs, reward, done, _ = self.env.step(action)
             if done:
                 new_obs = self.env.reset()
-
-            # print("Done", done)
 
             self.buf_obs[0] = new_obs
 
@@ -343,32 +347,25 @@ class A2C(nn.Module):
             if callback is not None and callback.on_step() is False:
                 return False
 
-            self.rollout_buffer.add(self._last_obs[0], action, reward,
-                                    self._last_done,
-                                    value, log_prob)
+            self.actions[i] = action
+            self.rewards[i] = reward
+            self.observations[i] = self._last_obs[0].copy()
+            self.dones[i] = self._last_done
+
             self._last_obs = self.buf_obs.copy()
             self._last_done = done
-
-        with torch.no_grad():
-            # Compute value for the last timestep
-            obs_tensor = torch.as_tensor(self._last_obs)
-            _, value, _ = self.forward(obs_tensor)
-
-        self.rollout_buffer.compute_returns_and_advantage(
-            last_value=value,
-            done=self._last_done)
 
         if callback is not None:
             callback.on_rollout_end()
 
-        # print("updating")
         return True
 
     def learn(
             self,
             total_timesteps: int,
             callback: MaybeCallback = None,
-            reset_num_timesteps: bool = True):
+            reset_num_timesteps: bool = True,
+            rollout_policy: object = None):
 
         total_timesteps, callback = self._setup_learn(
             total_timesteps, callback, reset_num_timesteps)
@@ -378,14 +375,12 @@ class A2C(nn.Module):
 
         while self.num_timesteps < total_timesteps:
 
-            continue_training = self.collect_rollouts(callback)
+            continue_training = self.collect_rollouts(
+                rollout_policy=rollout_policy,
+                callback=callback)
 
             if continue_training is False:
                 break
-
-            # Compute current progress remaining (starts from 1 and ends to 0)
-            # self._current_progress_remaining = \
-            #     1.0 - self.num_timesteps / float(total_timesteps)
 
             self.update_policy()
 
@@ -442,6 +437,19 @@ class A2C(nn.Module):
         log_prob = distribution.log_prob(actions)
         return actions, values, log_prob
 
+    def forward_action_only(self, obs: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
+        """
+        Forward pass in all the networks (actor and critic)
+
+        :param obs: Observation
+        :param deterministic: Whether to sample or use deterministic actions
+        :return: action, value and log probability of the action
+        """
+        latent_pi, latent_vf = self._get_latent(obs)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        actions = distribution.get_actions(deterministic=deterministic)
+        return actions
+
     def _get_latent(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get the latent code (i.e., activations of the last layer of each network)
@@ -451,7 +459,7 @@ class A2C(nn.Module):
         :return: Latent codes
             for the actor, the value function and for gSDE function
         """
-        features = self.features_extractor(obs.float())
+        features = obs.float()
         latent_pi, latent_vf = self.mlp_extractor(features)
         return latent_pi, latent_vf
 
@@ -470,25 +478,6 @@ class A2C(nn.Module):
             return self.action_dist.proba_distribution(mean_actions, self.log_std)
         else:
             raise ValueError("Action distribution not compatible with the current implementation")
-
-    # def scale_action(self, action: np.ndarray) -> np.ndarray:
-    #     """
-    #     Rescale the action from [low, high] to [-1, 1]
-    #     (no need for symmetric action space)
-    #     :param action: Action to scale
-    #     :return: Scaled action
-    #     """
-    #     low, high = self.action_space.low, self.action_space.high
-    #     return 2.0 * ((action - low) / (high - low)) - 1.0
-    #
-    # def unscale_action(self, scaled_action: np.ndarray) -> np.ndarray:
-    #     """
-    #     Rescale the action from [-1, 1] to [low, high]
-    #     (no need for symmetric action space)
-    #     :param scaled_action: Action to un-scale
-    #     """
-    #     low, high = self.action_space.low, self.action_space.high
-    #     return low + (0.5 * (scaled_action + 1.0) * (high - low))
 
     def predict(
         self,
@@ -558,13 +547,13 @@ class A2C(nn.Module):
             learning_rate=self.learning_rate,
             optimizer_name=self.optimizer_name,
             optimizer_kwargs=self.optimizer_kwargs,
-            n_steps=self.n_steps,
+            buffer_size=self.buffer_size,
             gamma=self.gamma,
             gae_lambda=self.gae_lambda,
             ent_coef=self.ent_coef,
             vf_coef=self.vf_coef,
             max_grad_norm=self.max_grad_norm,
-            normalize_advantage=self.normalize_advantage,
+            # normalize_advantage=self.normalize_advantage,
             ortho_init=self.ortho_init,
             log_std_init=self.log_std_init,
             net_arch=self.net_arch,
